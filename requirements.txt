@@ -1,0 +1,5 @@
+psycopg2
+pybit
+numpy
+Ta-Lib
+python-dotenv
