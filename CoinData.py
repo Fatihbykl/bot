@@ -1,3 +1,5 @@
+import time
+
 import numpy
 import numpy as np
 from pybit.unified_trading import WebSocket
@@ -16,19 +18,21 @@ class CoinData:
             symbol=None,
             channel_type=None,
             testnet=None,
-            interval=None
     ):
         self.symbol = symbol
         self.channel_type = channel_type
         self.testnet = testnet
-        self.interval = interval
         self.db = Database(config)
+        self.current_price = 0
 
     def start(self):
         """Start websocket connection"""
 
         ws = WebSocket(testnet=self.testnet, channel_type=self.channel_type)
-        ws.kline_stream(self.interval, self.symbol, self.handle_data)
+        ws.kline_stream(15, self.symbol, self.handle_data)
+        ws.kline_stream(60, self.symbol, self.handle_data)
+        ws.kline_stream(240, self.symbol, self.handle_data)
+        ws.kline_stream('D', self.symbol, self.handle_data)
 
     def handle_data(self, data):
         """Get data from websocket and save candle closes to database"""
@@ -36,7 +40,7 @@ class CoinData:
         print(data)
         _topic = str(data['topic']).split('.')[-1]
         data = data['data'][0]
-        _timestamp = datetime.fromtimestamp(data['start']/1000)
+        _timestamp = datetime.fromtimestamp(data['start'] / 1000)
         _interval = data['interval']
         _open = data['open']
         _close = data['close']
@@ -44,25 +48,29 @@ class CoinData:
         _low = data['low']
         _volume = data['volume']
 
+        self.current_price = _close
+
         is_closed = data["confirm"]
         if is_closed:
-            self.db.insert_row(_topic=_topic, _timestamp=_timestamp, _interval=_interval, _open=_open, _close=_close,
-                               _high=_high, _low=_low, _volume=_volume)
-            # save to database
-            # calculate things(rsi, cart curt) again
+            self.db.insert_row_kline(_topic=_topic, _timestamp=_timestamp, _interval=_interval, _open=_open,
+                                     _close=_close, _high=_high, _low=_low, _volume=_volume)
+            if _interval == '15':
+                self.calculate_indicators('15')
+            elif _interval == '60':
+                self.calculate_indicators('60')
+            elif _interval == '240':
+                self.calculate_indicators('240')
+            elif _interval == 'D':
+                self.calculate_indicators('D')
 
-    def calculate_rsi(self):
-        """Calculate RSI"""
+    def calculate_indicators(self, interval):
+        """Calculate indicators"""
 
-        ohlc = self.db.get_last_ohlc(self.symbol)
+        ohlc = self.db.get_last_ohlc(self.symbol, interval)
+
         rsi = talib.RSI(ohlc['close'], 14)
-        print(rsi)
-
-    def calculate_volatility(self):
-        """Calculate NATR"""
-
-        ohlc = self.db.get_last_ohlc(self.symbol)
         natr = talib.NATR(ohlc['high'], ohlc['low'], ohlc['close'])
-        print(natr)
+
+        self.db.insert_row_coindata(self.symbol, interval, rsi[-1], natr[-1], '0')
 
 
