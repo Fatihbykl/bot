@@ -1,3 +1,5 @@
+import datetime
+
 import psycopg2
 import numpy
 
@@ -31,13 +33,13 @@ class Database:
             finally:
                 print('Connection opened successfully.')
 
-    def insert_row(self, _topic, _timestamp, _interval, _open, _close, _high, _low, _volume):
+    def insert_row_kline(self, _topic, _timestamp, _interval, _open, _close, _high, _low, _volume):
         self.connect()
         with self.conn.cursor() as cur:
             try:
-                query = """INSERT INTO "KlineData" (topic, timestamp, interval, open, close, high, low, volume) VALUES 
+                query = """INSERT INTO "KlineData" (topic, timestamp, open, close, high, low, volume, interval) VALUES 
                 (%s, %s, %s, %s, %s, %s, %s, %s)"""
-                values = (_topic, _timestamp, _interval, _open, _close, _high, _low, _volume)
+                values = (_topic, _timestamp, _open, _close, _high, _low, _volume, _interval)
                 cur.execute(query, values)
                 self.conn.commit()
                 cur.close()
@@ -47,12 +49,44 @@ class Database:
             finally:
                 print('Values inserted successfully.')
 
-    def get_last_ohlc(self, _topic):
+    def insert_multiple_row_kline(self, values):
         self.connect()
         with self.conn.cursor() as cur:
             try:
-                query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s"""
-                values = (_topic,)
+                args = ','.join(cur.mogrify("(%s,%s,%s, %s, %s, %s, %s, %s)", i).decode('utf-8')
+                                for i in values)
+                query = "INSERT INTO \"KlineData\" VALUES " + (args)
+                cur.execute(query, values)
+                self.conn.commit()
+                cur.close()
+            except psycopg2.DatabaseError as e:
+                print(e)
+                raise e
+            finally:
+                print('Values inserted successfully.')
+
+    def insert_row_coindata(self, topic, interval, rsi, natr, volume, timestamp=datetime.datetime.now()):
+        self.connect()
+        with self.conn.cursor() as cur:
+            try:
+                query = """INSERT INTO "CoinData" (topic, timestamp, interval, rsi, natr, volume) 
+                VALUES(%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE timestamp=%s, rsi=%s, natr=%s, volume=%s"""
+                values = (topic, timestamp, interval, rsi, natr, volume, timestamp, rsi, natr, volume)
+                cur.execute(query, values)
+                self.conn.commit()
+                cur.close()
+            except psycopg2.DatabaseError as e:
+                print(e)
+                raise e
+            finally:
+                print('Values inserted successfully.')
+
+    def get_last_ohlc(self, _topic, _interval):
+        self.connect()
+        with self.conn.cursor() as cur:
+            try:
+                query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s AND interval=%s"""
+                values = (_topic, _interval)
                 cur.execute(query, values)
                 open = []
                 close = []
@@ -71,4 +105,3 @@ class Database:
                 raise e
             finally:
                 print('Data fetched successfully.')
-
