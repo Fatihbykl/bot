@@ -5,7 +5,7 @@ import numpy
 
 
 class Database:
-    """PostgreSQL Database class"""
+    """ PostgreSQL Database class. """
 
     def __init__(self, config):
         self.host = config.DATABASE_HOST
@@ -16,7 +16,7 @@ class Database:
         self.conn = None
 
     def connect(self):
-        """Connect to a Postgres database"""
+        """ Connect to a Postgres database. """
 
         if self.conn is None:
             try:
@@ -50,6 +50,8 @@ class Database:
                 print('Values inserted successfully.')
 
     def insert_multiple_row_kline(self, values):
+        """ Insert multiple data to KlineData table. """
+
         self.connect()
         with self.conn.cursor() as cur:
             try:
@@ -66,12 +68,31 @@ class Database:
                 print('Values inserted successfully.')
 
     def insert_row_coindata(self, topic, interval, rsi, natr, volume, timestamp=datetime.datetime.now()):
+        """ Insert data to CoinData table. """
+
         self.connect()
         with self.conn.cursor() as cur:
             try:
-                query = """INSERT INTO "CoinData" (topic, timestamp, interval, rsi, natr, volume) 
-                VALUES(%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE timestamp=%s, rsi=%s, natr=%s, volume=%s"""
-                values = (topic, timestamp, interval, rsi, natr, volume, timestamp, rsi, natr, volume)
+                query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval) 
+                VALUES(%s, %s, %s, %s, %s, %s)"""
+                values = (topic, rsi, natr, volume, timestamp, interval)
+                cur.execute(query, values)
+                self.conn.commit()
+                cur.close()
+            except psycopg2.DatabaseError as e:
+                print(e)
+                raise e
+            finally:
+                print('Values inserted successfully.')
+
+    def update_row_coindata(self, topic, rsi, natr, volume, timestamp=datetime.datetime.now()):
+        """ Update data from CoinData table. """
+
+        self.connect()
+        with self.conn.cursor() as cur:
+            try:
+                query = """UPDATE "CoinData" SET rsi=%s, natr=%s, volume=%s, timestamp=%s WHERE topic=%s"""
+                values = (rsi, natr, volume, timestamp, topic)
                 cur.execute(query, values)
                 self.conn.commit()
                 cur.close()
@@ -82,11 +103,14 @@ class Database:
                 print('Values inserted successfully.')
 
     def get_last_ohlc(self, _topic, _interval):
+        """ Get last ohlc data from given topic and interval. """
+
         self.connect()
         with self.conn.cursor() as cur:
             try:
-                query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s AND interval=%s"""
-                values = (_topic, _interval)
+                query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s AND interval=%s
+                        ORDER BY "timestamp" """
+                values = (_topic, str(_interval))
                 cur.execute(query, values)
                 open = []
                 close = []
