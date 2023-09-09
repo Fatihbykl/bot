@@ -1,65 +1,67 @@
+import csv
+import logging
 import time
-
-import numpy
-import numpy as np
 from pybit.unified_trading import WebSocket
 from pybit.unified_trading import MarketHTTP
-from time import sleep
 from talib import _ta_lib as talib
 from db import Database
 import config
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from api.cmc_api import create_csv
+from queue import Queue
 
 
 class ManageCoins:
     """ CoinData initiator class. """
 
     instance = None
-    object_dict = {}
 
-    def __new__(cls):
+    def __new__(cls, intervals, testnet):
         """ Code for Singleton. """
 
         if not isinstance(cls.instance, cls):
             cls.instance = super(ManageCoins, cls).__new__(cls)
         return cls.instance
 
+    def __init__(self, intervals, testnet):
+        self.intervals = intervals
+        self.object_dict = {}
+        self.data_queue = Queue()
+        self.db = Database(config=config)
+        self.session = MarketHTTP(testnet=testnet)
+        self.logger = logging.getLogger()
+
     def add_coin_connection(self, pair_names):
         """ Create objects and start websocket connections. """
 
-        start_time = time.time()
-        session = MarketHTTP(testnet=False)
-        db = Database(config)
-        intervals = [1, 15, 60, 240, 'D']
+        try:
+            executor = ThreadPoolExecutor()
+            for pair in pair_names:
+                if not self.object_dict.get(pair):
+                    time.sleep(0.3)
+                    executor.submit(self.initialize_objects, pair)
+            executor.shutdown(wait=True)
+            self.insert_data_to_db()
+        except Exception as e:
+            self.logger.exception(e)
+            raise e
 
-        for pair in pair_names:
-            if not self.object_dict.get(pair):
-                obj = Coin(symbol=pair, channel_type='linear', testnet=False)
-                obj.start()
-                self.object_dict[pair] = obj
+    def initialize_objects(self, pair):
+        """ Init coin objects and add historical data to queue. """
 
-                for interval in intervals:
-                    time.sleep(0.1)
+        obj = Coin(symbol=pair, channel_type='linear', testnet=True)
+        self.object_dict[pair] = obj
+        for interval in self.intervals:
+            time.sleep(0.1)
+            values = self.extract_values_from_response(pair=pair, interval=interval)
+            self.data_queue.put(values)
 
-                    values = self.extract_values(session, pair, interval)
+    def extract_values_from_response(self, pair, interval):
+        """ Get historical bars. """
 
-                    db.insert_row_coindata(
-                        topic=pair + '_' + str(interval),
-                        interval=interval,
-                        rsi=0,
-                        natr=0,
-                        volume='0')
-                    db.insert_multiple_row_kline(values=values)
-                    obj.calculate_indicators(interval)
-                time.sleep(0.5)
-
-            end_time = time.time()
-            print(end_time - start_time)
-
-    @staticmethod
-    def extract_values(session, pair, interval):
         values = []
-        data = session.get_kline(category='linear', symbol=pair, interval=interval, limit=100)
+        data = self.session.get_kline(category='linear', symbol=pair, interval=interval, limit=100)
         for item in data['result']['list']:
             timestamp = datetime.fromtimestamp(int(item[0]) / 1000)
             open = item[1]
@@ -67,8 +69,31 @@ class ManageCoins:
             low = item[3]
             close = item[4]
             volume = item[5]
-            values.append((pair, timestamp, open, close, high, low, volume, interval))
+            values.append([pair, timestamp, open, close, high, low, volume, interval])
         return values
+
+    def insert_data_to_db(self):
+        """ Create csv file from queue and bulk insert to database. """
+
+        with open('csv_data/kline_data.csv', 'w', newline='') as file:
+            while not self.data_queue.empty():
+                data = self.data_queue.get()
+                csvwriter = csv.writer(file)
+                csvwriter.writerows(data)
+        self.db.insert_from_csv('KlineData', 'csv_data/kline_data.csv')
+
+    def update_coin_info(self):
+        """ Update Coinmarketcap data. """
+
+        try:
+            path = 'csv_data/cmc_data.csv'
+            ids_path = 'csv_data/coin_data.csv'
+            create_csv(ids_path=ids_path, data_path=path, limit=1000)
+            self.db.truncate_coininfo_table()
+            self.db.insert_from_csv(tablename='CoinInfo', csv_path=path)
+        except Exception as e:
+            self.logger.exception(e)
+            raise e
 
     def get_coin_object(self, pair_name):
         """ Get object for given pair_name. """
@@ -89,7 +114,7 @@ class Coin:
         self.channel_type = channel_type
         self.testnet = testnet
         self.db = Database(config)
-        self.current_price = 0
+        self.current_price = '0'
 
     def start(self):
         """ Start websocket connection. """
@@ -104,7 +129,6 @@ class Coin:
     def handle_data(self, data):
         """ Get data from websocket and save candle closes to database. """
 
-        print(data)
         _topic = str(data['topic']).split('.')[-1]
         data = data['data'][0]
         _timestamp = datetime.fromtimestamp(data['start'] / 1000)
@@ -139,5 +163,3 @@ class Coin:
 
         pair_name = self.symbol + '_' + str(interval)
         self.db.update_row_coindata(pair_name, rsi[-1], natr[-1], '0')
-
-

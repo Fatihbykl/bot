@@ -82,13 +82,14 @@ class Bot:
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s :: %(levelname)s :: %(message)s',
-            filename='bybit.log'
+            filename='./logs/bybit.log'
         )
         getcontext().prec = 6
 
     def run(self):
         """ Main function that run forever. """
-
+        pass
+        """
         qty = self.calculate_quantity()
         self.place_market_order(Side.BUY, qty)
         print(self.buy_position)
@@ -97,7 +98,7 @@ class Bot:
         time.sleep(10)
         self.close_position(self.buy_position, 1)
         print(self.buy_position)
-
+        """
     def start(self):
         """ Start thread. """
 
@@ -112,8 +113,8 @@ class Bot:
             category="linear",
             symbol=self.coin.symbol,
         )
-        self.max_qty = float(info['result']['list'][0]['lotSizeFilter']['maxOrderQty'])
-        self.min_qty = float(info['result']['list'][0]['lotSizeFilter']['minOrderQty'])
+        self.max_qty = info['result']['list'][0]['lotSizeFilter']['maxOrderQty']
+        self.min_qty = info['result']['list'][0]['lotSizeFilter']['minOrderQty']
         max_leverage = info['result']['list'][0]['leverageFilter']['maxLeverage']
         max_leverage = max_leverage.split('.')[0]
 
@@ -156,7 +157,7 @@ class Bot:
         r = value * Decimal(self.r_value)
         raw_qty = r / Decimal(self.coin.current_price[0])
         qty = math.floor(raw_qty / Decimal(self.min_qty)) * Decimal(self.min_qty)
-        return min(qty, self.max_qty)
+        return min(round(qty, 3), int(self.max_qty))
 
     def place_market_order(self, side, quantity):
         """ Buy coin with market order. """
