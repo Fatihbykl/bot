@@ -31,6 +31,7 @@ class ManageCoins:
         self.db = Database(config=config)
         self.session = MarketHTTP(testnet=testnet)
         self.logger = logging.getLogger()
+        self.testnet = testnet
 
     def add_coin_connection(self, pair_names):
         """ Create objects and start websocket connections. """
@@ -43,6 +44,7 @@ class ManageCoins:
                     executor.submit(self.initialize_objects, pair)
             executor.shutdown(wait=True)
             self.insert_data_to_db()
+            self.logger.info('--- %s coins initialized successfully! ---', str(len(pair_names)))
         except Exception as e:
             self.logger.exception(e)
             raise e
@@ -50,18 +52,19 @@ class ManageCoins:
     def initialize_objects(self, pair):
         """ Init coin objects and add historical data to queue. """
 
-        obj = Coin(symbol=pair, channel_type='linear', testnet=True)
+        obj = Coin(symbol=pair, channel_type='linear', testnet=self.testnet, intervals=self.intervals)
         self.object_dict[pair] = obj
         for interval in self.intervals:
             time.sleep(0.1)
             values = self.extract_values_from_response(pair=pair, interval=interval)
             self.data_queue.put(values)
+        self.logger.info('%s initialized successfully', pair)
 
     def extract_values_from_response(self, pair, interval):
         """ Get historical bars. """
 
         values = []
-        data = self.session.get_kline(category='linear', symbol=pair, interval=interval, limit=100)
+        data = self.session.get_kline(category='linear', symbol=pair, interval=interval, limit=500)
         for item in data['result']['list']:
             timestamp = datetime.fromtimestamp(int(item[0]) / 1000)
             open = item[1]
@@ -86,11 +89,9 @@ class ManageCoins:
         """ Update Coinmarketcap data. """
 
         try:
-            path = 'csv_data/cmc_data.csv'
-            ids_path = 'csv_data/coin_data.csv'
-            create_csv(ids_path=ids_path, data_path=path, limit=1000)
+            create_csv(api_coin_limit=1000)
             self.db.truncate_coininfo_table()
-            self.db.insert_from_csv(tablename='CoinInfo', csv_path=path)
+            self.db.insert_from_csv(tablename='CoinInfo', csv_path=config.CMC_DATA_PATH)
         except Exception as e:
             self.logger.exception(e)
             raise e
@@ -109,6 +110,7 @@ class Coin:
             symbol=None,
             channel_type=None,
             testnet=None,
+            intervals=None
     ):
         self.symbol = symbol
         self.channel_type = channel_type
@@ -156,10 +158,13 @@ class Coin:
     def calculate_indicators(self, interval):
         """ Calculate indicators. """
 
-        ohlc = self.db.get_last_ohlc(self.symbol, interval)
+        try:
+            ohlc = self.db.get_last_ohlc(self.symbol, interval)
 
-        rsi = talib.RSI(ohlc['close'], 14)
-        natr = talib.NATR(ohlc['high'], ohlc['low'], ohlc['close'])
+            rsi = talib.RSI(ohlc['close'], 14)
+            natr = talib.NATR(ohlc['high'], ohlc['low'], ohlc['close'])
 
-        pair_name = self.symbol + '_' + str(interval)
-        self.db.update_row_coindata(pair_name, rsi[-1], natr[-1], '0')
+            pair_name = self.symbol + '_' + str(interval)
+            self.db.upsert_row_coindata(topic=pair_name, rsi=rsi[-1], natr=natr[-1], volume='0', interval=interval)
+        except Exception as e:
+            raise e

@@ -1,5 +1,7 @@
-psycopg2
-pybit
-numpy
-Ta-Lib
-python-dotenv
+psycopg2==2.9.7
+pybit==5.5.0
+numpy==1.25.2
+Ta-Lib==0.4.18
+python-dotenv==1.0.0
+plotly==5.16.1
+pandas==2.1.0
