@@ -3,6 +3,7 @@ import logging
 import psycopg2
 from psycopg2 import pool
 import numpy
+import pandas as pd
 
 
 class Database:
@@ -35,7 +36,7 @@ class Database:
             try:
                 self.conn = pool.ThreadedConnectionPool(
                     minconn=1,
-                    maxconn=10,
+                    maxconn=100,
                     host=self.host,
                     user=self.username,
                     password=self.password,
@@ -45,8 +46,6 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Connection opened successfully.')
 
     def insert_row_kline(self, _topic, _timestamp, _interval, _open, _close, _high, _low, _volume):
         """ Insert row to KlineData table. """
@@ -64,8 +63,6 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Values inserted successfully.')
 
     def insert_multiple_row_kline(self, values):
         """ Insert multiple data to KlineData table. """
@@ -83,17 +80,34 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Values inserted successfully.')
 
-    def insert_row_coindata(self, topic, interval, rsi, natr, volume, timestamp=datetime.datetime.now()):
-        """ Insert data to CoinData table. """
+    # def insert_row_coindata(self, topic, interval, rsi, natr, volume, timestamp=datetime.datetime.now()):
+    #     """ Insert data to CoinData table. """
+    #
+    #     connection = self.conn.getconn()
+    #     with connection.cursor() as cur:
+    #         try:
+    #             query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval)
+    #             VALUES(%s, %s, %s, %s, %s, %s)"""
+    #             values = (topic, rsi, natr, volume, timestamp, interval)
+    #             cur.execute(query, values)
+    #             connection.commit()
+    #             cur.close()
+    #             self.conn.putconn(conn=connection)
+    #         except psycopg2.DatabaseError as e:
+    #             self.logger.exception(e)
+    #             raise e
+
+    def upsert_row_coindata(self, topic, rsi, natr, volume, interval, timestamp=datetime.datetime.now()):
+        """ Update data from CoinData table. """
 
         connection = self.conn.getconn()
         with connection.cursor() as cur:
             try:
-                query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval) 
-                VALUES(%s, %s, %s, %s, %s, %s)"""
+                query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (topic) DO UPDATE SET rsi=excluded.rsi, natr=excluded.natr, volume=excluded.volume,
+                timestamp=excluded.timestamp, interval=excluded.interval"""
                 values = (topic, rsi, natr, volume, timestamp, interval)
                 cur.execute(query, values)
                 connection.commit()
@@ -102,26 +116,6 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Values inserted successfully.')
-
-    def update_row_coindata(self, topic, rsi, natr, volume, timestamp=datetime.datetime.now()):
-        """ Update data from CoinData table. """
-
-        connection = self.conn.getconn()
-        with connection.cursor() as cur:
-            try:
-                query = """UPDATE "CoinData" SET rsi=%s, natr=%s, volume=%s, timestamp=%s WHERE topic=%s"""
-                values = (rsi, natr, volume, timestamp, topic)
-                cur.execute(query, values)
-                connection.commit()
-                cur.close()
-                self.conn.putconn(conn=connection)
-            except psycopg2.DatabaseError as e:
-                self.logger.exception(e)
-                raise e
-            finally:
-                print('Values inserted successfully.')
 
     def insert_from_csv(self, tablename, csv_path):
         """ Insert data from csv file. """
@@ -137,8 +131,6 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Data fetched successfully.')
 
     def truncate_coininfo_table(self):
         """ Remove rows from CoinInfo table. """
@@ -154,8 +146,21 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Data fetched successfully.')
+
+    def get_coindata_values(self, interval):
+        """ Get last ohlc data from given topic and interval. """
+
+        connection = self.conn.getconn()
+        with connection.cursor() as cur:
+            try:
+                query = """SELECT * FROM "CoinData" WHERE interval=\'{0}\'""".format(interval)
+                df = pd.read_sql_query(query, connection)
+                cur.close()
+                self.conn.putconn(conn=connection)
+                return df
+            except psycopg2.DatabaseError as e:
+                self.logger.exception(e)
+                raise e
 
     def get_last_ohlc(self, _topic, _interval):
         """ Get last ohlc data from given topic and interval. """
@@ -164,7 +169,7 @@ class Database:
         with connection.cursor() as cur:
             try:
                 query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s AND interval=%s
-                        ORDER BY "timestamp" """
+                        ORDER BY "timestamp" DESC """
                 values = (_topic, str(_interval))
                 cur.execute(query, values)
                 open = []
@@ -183,5 +188,3 @@ class Database:
             except psycopg2.DatabaseError as e:
                 self.logger.exception(e)
                 raise e
-            finally:
-                print('Data fetched successfully.')

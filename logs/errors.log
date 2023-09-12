@@ -1,0 +1,93 @@
+[2023-09-12 00:58:00,397][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C605E0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,403][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C68700>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,431][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD609CECA0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,446][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D0A790>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,461][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F727CA0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,476][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CE5310>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,480][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CD2D30>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,507][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD609C41F0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,523][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F8BA940>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,527][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D6A3A0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,532][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F6ED160>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,535][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD60FAC430>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,539][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD626F38B0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,543][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D70A60>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,547][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D70160>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,551][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F8BDA60>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,570][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CD2700>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,585][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D5A3A0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,587][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C60820>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,591][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C55430>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,594][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C68940>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,623][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD609CEAF0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,629][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F882040>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,635][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F6DB790>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,637][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D0A8B0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,639][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D66A60>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,653][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F727DC0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,670][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CE5430>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,675][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CD2EE0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,701][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD609C4550>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,717][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F8BAB80>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,718][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D6A8B0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,724][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD60FAC9D0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,725][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F6ED310>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,730][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD626F39D0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,733][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D70B80>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,742][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D70700>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,743][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F8BDCA0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,767][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62CD2790>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,776][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D5A5E0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,781][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62C554C0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,821][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F8821F0>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,831][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD5F6DB820>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 00:58:00,831][_logging.py:64 -                error() ] error from callback <function _WebSocketManager._connect.<locals>.<lambda> at 0x000001CD62D6A160>: connection to server at "localhost" (::1), port 5432 failed: FATAL:  sorry, too many clients already
+
+[2023-09-12 01:13:25,744][market.py:97 -     update_coin_info() ] create_csv() missing 1 required positional argument: 'limit'
+Traceback (most recent call last):
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\market.py", line 93, in update_coin_info
+    create_csv(ids_path=ids_path, data_path=path)
+TypeError: create_csv() missing 1 required positional argument: 'limit'
