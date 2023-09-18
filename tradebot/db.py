@@ -81,34 +81,17 @@ class Database:
                 self.logger.exception(e)
                 raise e
 
-    # def insert_row_coindata(self, topic, interval, rsi, natr, volume, timestamp=datetime.datetime.now()):
-    #     """ Insert data to CoinData table. """
-    #
-    #     connection = self.conn.getconn()
-    #     with connection.cursor() as cur:
-    #         try:
-    #             query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval)
-    #             VALUES(%s, %s, %s, %s, %s, %s)"""
-    #             values = (topic, rsi, natr, volume, timestamp, interval)
-    #             cur.execute(query, values)
-    #             connection.commit()
-    #             cur.close()
-    #             self.conn.putconn(conn=connection)
-    #         except psycopg2.DatabaseError as e:
-    #             self.logger.exception(e)
-    #             raise e
-
-    def upsert_row_coindata(self, topic, rsi, natr, volume, interval, timestamp=datetime.datetime.now()):
+    def upsert_row_coindata(self, topic, rsi, natr, volume, interval, adx, timestamp=datetime.datetime.now()):
         """ Update data from CoinData table. """
 
         connection = self.conn.getconn()
         with connection.cursor() as cur:
             try:
-                query = """INSERT INTO "CoinData" (topic, rsi, natr, volume, timestamp, interval)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                query = """INSERT INTO "CoinData" (topic, timestamp, interval, rsi, natr, adx, volume)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (topic) DO UPDATE SET rsi=excluded.rsi, natr=excluded.natr, volume=excluded.volume,
-                timestamp=excluded.timestamp, interval=excluded.interval"""
-                values = (topic, rsi, natr, volume, timestamp, interval)
+                timestamp=excluded.timestamp, interval=excluded.interval, adx=excluded.adx"""
+                values = (topic, timestamp, interval, rsi, natr, adx, volume)
                 cur.execute(query, values)
                 connection.commit()
                 cur.close()

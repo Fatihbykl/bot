@@ -16,6 +16,7 @@ from talib import _ta_lib as talib
 from pybit.unified_trading import HTTP
 from confdata import Side, Position
 from decimal import Decimal, getcontext
+from strategies.strategies import StmaADX
 
 
 class ManageBots:
@@ -37,9 +38,10 @@ class ManageBots:
         pass
 
     def start_bots(self):
-        coins = ManageCoins()
-        btc = coins.get_coin_object('ASTRUSDT')
-        bot = Bot(self.db, btc, '1', '0.1')
+        coins = ManageCoins(config.INTERVALS, True)
+        coin = coins.get_coin_object('ASTRUSDT')
+        strategy = StmaADX()
+        bot = Bot(db=self.db, coin=coin, strategy=strategy, interval='1', r_value='0.1')
         bot.start()
 
 
@@ -51,21 +53,25 @@ class Bot:
                  coin: Coin,
                  interval,
                  r_value,
-                 trade_value=2000
+                 strategy,
+                 trade_value=2000,
                  ):
         self.coin = coin
         self.trade_value = trade_value
         self.r_value = r_value
+        self.strategy = strategy
         self.stopped = True
         self.db = db
         self.interval = interval
 
-        self.buy_position = None
-        self.sell_position = None
+        self.position = None
 
         self.leverage = 10
         self.stop_loss_buy = '0.98'
         self.stop_loss_sell = '1.02'
+
+        self.ohlc_data = None
+        self.signal = None
 
         self.max_qty = None
         self.min_qty = None
@@ -88,7 +94,32 @@ class Bot:
 
     def run(self):
         """ Main function that run forever. """
-        pass
+
+        self.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
+        while not self.stopped:  # and check if position open
+            current_price = self.coin.current_price[0]
+            candle_closed = self.coin.current_price[1]
+
+            if candle_closed:
+                self.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
+                self.signal = self.strategy.produce_signal(
+                    self.ohlc_data['open'],
+                    self.ohlc_data['high'],
+                    self.ohlc_data['low'],
+                    self.ohlc_data['close'],
+                    10,
+                    0.5,
+                    100,
+                    0.7
+                )
+
+            if not self.position:
+                if self.signal == Side.BUY:
+                    self.place_market_order(Side.BUY, self.calculate_quantity())
+                elif self.signal == Side.SELL:
+                    self.place_market_order(Side.SELL, self.calculate_quantity())
+            
+
         """
         qty = self.calculate_quantity()
         self.place_market_order(Side.BUY, qty)
@@ -99,6 +130,7 @@ class Bot:
         self.close_position(self.buy_position, 1)
         print(self.buy_position)
         """
+
     def start(self):
         """ Start thread. """
 
@@ -179,7 +211,7 @@ class Bot:
         self.update_position()
         return order
 
-    def close_position(self, position, size):  # size=1: Close full position, size=0.5 half of the postition etc.
+    def close_position(self, position, size):
         """
             Close position or take profit from it.
             Size=1 means full position, Size=0.5 means close half of the position etc.
@@ -200,10 +232,7 @@ class Bot:
             reduceOnly=True
         )
         if size == 1:
-            if position.side == Side.BUY:
-                self.buy_position = None
-            else:
-                self.sell_position = None
+            self.position = None
         else:
             self.update_position()
         return order
@@ -216,107 +245,19 @@ class Bot:
             symbol=self.coin.symbol,
         )
         for position in positions['result']['list']:
-            if position['side'] == Side.BUY:
-                if not self.buy_position:
-                    pos = Position(
-                        symbol=position['symbol'],
-                        side=position['side'],
-                        size=position['size'],
-                        entry_price=position['avgPrice'],
-                        created_time=datetime.now(),
-                        close_prices=[],
-                        value=position['positionValue']
-                    )
-                    self.buy_position = pos
-                elif self.buy_position.size != position['size']:
-                    self.buy_position.size = position['size']
-                    self.buy_position.value = position['positionValue']
-                    self.buy_position.close_prices.append(self.coin.current_price[0])
-            else:
-                if not self.sell_position:
-                    pos = Position(
-                        symbol=position['symbol'],
-                        side=position['side'],
-                        size=position['size'],
-                        entry_price=position['avgPrice'],
-                        created_time=datetime.now(),
-                        close_prices=[],
-                        value=position['positionValue']
-                    )
-                    self.sell_position = pos
-                elif self.sell_position.size != position['size']:
-                    self.sell_position.size = position['size']
-                    self.sell_position.value = position['positionValue']
-                    self.sell_position.close_prices.append(self.coin.current_price[0])
+            if not self.position:
+                pos = Position(
+                    symbol=position['symbol'],
+                    side=position['side'],
+                    size=position['size'],
+                    entry_price=position['avgPrice'],
+                    created_time=datetime.now(),
+                    close_prices=[],
+                    value=position['positionValue']
+                )
+                self.position = pos
+            elif self.position.size != position['size']:
+                self.position.size = position['size']
+                self.position.value = position['positionValue']
+                self.position.close_prices.append(self.coin.current_price[0])
 
-    def produce_signal(self, close_array, high_array, low_array, atr_period, atr_multiplier):
-        """ Produce signal from calculated supertrend. """
-
-        supertrend = self.generate_supertrend(close_array, high_array, low_array, atr_period, atr_multiplier)
-        close = close_array[-1]
-        p_close = close_array[-2]
-        st = supertrend[-1]
-        p_st = supertrend[-2]
-
-        if close > st and p_close < p_st:
-            return 'B'
-        if close < st and p_close > p_st:
-            return 'S'
-
-    @staticmethod
-    def generate_supertrend(close_array, high_array, low_array, atr_period, atr_multiplier):
-        """ Calculate supertrend. """
-
-        atr = talib.ATR(high_array, low_array, close_array, atr_period)
-        previous_final_upperband = 0
-        previous_final_lowerband = 0
-        final_upperband = 0
-        final_lowerband = 0
-        previous_close = 0
-        previous_supertrend = 0
-        supertrend = []
-        supertrendc = 0
-
-        for i in range(0, len(close_array)):
-            if np.isnan(close_array[i]):
-                pass
-            else:
-                highc = high_array[i]
-                lowc = low_array[i]
-                atrc = atr[i]
-                closec = close_array[i]
-
-                if math.isnan(atrc):
-                    atrc = 0
-
-                basic_upperband = (highc + lowc) / 2 + atr_multiplier * atrc
-                basic_lowerband = (highc + lowc) / 2 - atr_multiplier * atrc
-
-                if basic_upperband < previous_final_upperband or previous_close > previous_final_upperband:
-                    final_upperband = basic_upperband
-                else:
-                    final_upperband = previous_final_upperband
-
-                if basic_lowerband > previous_final_lowerband or previous_close < previous_final_lowerband:
-                    final_lowerband = basic_lowerband
-                else:
-                    final_lowerband = previous_final_lowerband
-
-                if previous_supertrend == previous_final_upperband and closec <= final_upperband:
-                    supertrendc = final_upperband
-                else:
-                    if previous_supertrend == previous_final_upperband and closec >= final_upperband:
-                        supertrendc = final_lowerband
-                    else:
-                        if previous_supertrend == previous_final_lowerband and closec >= final_lowerband:
-                            supertrendc = final_lowerband
-                        elif previous_supertrend == previous_final_lowerband and closec <= final_lowerband:
-                            supertrendc = final_upperband
-
-                supertrend.append(supertrendc)
-
-                previous_close = closec
-                previous_final_upperband = final_upperband
-                previous_final_lowerband = final_lowerband
-                previous_supertrend = supertrendc
-        return supertrend
