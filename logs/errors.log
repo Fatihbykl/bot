@@ -91,3 +91,43 @@ Traceback (most recent call last):
   File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\market.py", line 93, in update_coin_info
     create_csv(ids_path=ids_path, data_path=path)
 TypeError: create_csv() missing 1 required positional argument: 'limit'
+[2023-09-12 21:40:15,373][db.py:132 -      insert_from_csv() ] extra data after last expected column
+CONTEXT:  COPY CoinInfo, line 1: "1,Bitcoin,BTC,19483556,18818282930.45413,506115394463.771,3.72"
+Traceback (most recent call last):
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\db.py", line 127, in insert_from_csv
+    cur.copy_from(file=file, table=tablename, sep=',')
+psycopg2.errors.BadCopyFileFormat: extra data after last expected column
+CONTEXT:  COPY CoinInfo, line 1: "1,Bitcoin,BTC,19483556,18818282930.45413,506115394463.771,3.72"
+
+[2023-09-12 21:40:15,374][market.py:96 -     update_coin_info() ] extra data after last expected column
+CONTEXT:  COPY CoinInfo, line 1: "1,Bitcoin,BTC,19483556,18818282930.45413,506115394463.771,3.72"
+Traceback (most recent call last):
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\market.py", line 94, in update_coin_info
+    self.db.insert_from_csv(tablename='CoinInfo', csv_path=config.CMC_DATA_PATH)
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\db.py", line 133, in insert_from_csv
+    raise e
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\db.py", line 127, in insert_from_csv
+    cur.copy_from(file=file, table=tablename, sep=',')
+psycopg2.errors.BadCopyFileFormat: extra data after last expected column
+CONTEXT:  COPY CoinInfo, line 1: "1,Bitcoin,BTC,19483556,18818282930.45413,506115394463.771,3.72"
+
+[2023-09-17 21:50:24,864][db.py:47 -              connect() ] connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+Traceback (most recent call last):
+  File "C:\Users\fatih\PycharmProjects\TAtest\tradebot\db.py", line 37, in connect
+    self.conn = pool.ThreadedConnectionPool(
+  File "C:\Users\fatih\PycharmProjects\LolCharacterRecognition39\TAtest\lib\site-packages\psycopg2\pool.py", line 161, in __init__
+    AbstractConnectionPool.__init__(
+  File "C:\Users\fatih\PycharmProjects\LolCharacterRecognition39\TAtest\lib\site-packages\psycopg2\pool.py", line 59, in __init__
+    self._connect()
+  File "C:\Users\fatih\PycharmProjects\LolCharacterRecognition39\TAtest\lib\site-packages\psycopg2\pool.py", line 63, in _connect
+    conn = psycopg2.connect(*self._args, **self._kwargs)
+  File "C:\Users\fatih\PycharmProjects\LolCharacterRecognition39\TAtest\lib\site-packages\psycopg2\__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+

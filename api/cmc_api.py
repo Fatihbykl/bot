@@ -1,4 +1,5 @@
 import csv
+import decimal
 import config
 import logging
 import pandas as pd
@@ -17,13 +18,18 @@ def get_data(id_list, api_key, limit):
     coin_data = []
     for coin in coins.data:
         if coin['id'] in id_list:
+            volume = coin['quote']['USD']['volume_24h']
+            market_cap = coin['quote']['USD']['market_cap']
+            vol_mcap = decimal.Decimal(volume) / decimal.Decimal(market_cap)
+            vol_mcap = round(vol_mcap * 100, 2)
             coin_data.append([
                 coin['id'],
                 coin['name'],
                 coin['symbol'],
                 coin['circulating_supply'],
-                coin['quote']['USD']['volume_24h'],
-                coin['quote']['USD']['market_cap']
+                volume,
+                market_cap,
+                vol_mcap
             ])
     return coin_data
 

@@ -95,6 +95,8 @@ class ManageCoins:
         except Exception as e:
             self.logger.exception(e)
             raise e
+        finally:
+            self.logger.info('Updated coin info. ' + str(datetime.now()))
 
     def get_coin_object(self, pair_name):
         """ Get object for given pair_name. """
@@ -163,8 +165,9 @@ class Coin:
 
             rsi = talib.RSI(ohlc['close'], 14)
             natr = talib.NATR(ohlc['high'], ohlc['low'], ohlc['close'])
+            adx = talib.ADX(ohlc['high'], ohlc['low'], ohlc['close'], 14)
 
             pair_name = self.symbol + '_' + str(interval)
-            self.db.upsert_row_coindata(topic=pair_name, rsi=rsi[-1], natr=natr[-1], volume='0', interval=interval)
+            self.db.upsert_row_coindata(topic=pair_name, rsi=rsi[-1], natr=natr[-1], volume='0', interval=interval, adx=adx[-1])
         except Exception as e:
             raise e

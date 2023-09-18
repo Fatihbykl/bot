@@ -1,6 +1,7 @@
 from market import ManageCoins
 from bot import ManageBots
 import time
+import schedule
 from db import Database
 import plotly.express as px
 import plotly.graph_objects as go
@@ -86,16 +87,16 @@ def get_pair_list():
 def init_coins(pair_list):
     coins = ManageCoins(intervals=config.INTERVALS, testnet=False)
     coins.update_coin_info()
-    coins.add_coin_connection(pair_list)
-    for coin in coins.object_dict.values():
-        time.sleep(0.2)
-        coin.start()
-        for interval in config.INTERVALS:
-            coin.calculate_indicators(interval=interval)
+    # coins.add_coin_connection(pair_list)
+    # for coin in coins.object_dict.values():
+    #     time.sleep(0.2)
+    #     coin.start()
+    #     for interval in config.INTERVALS:
+    #         coin.calculate_indicators(interval=interval)
+    return coins
 
 
 def init_bot():
-    pass
     bots = ManageBots(Database(config))
     bots.start_bots()
 
@@ -122,12 +123,15 @@ def setup_logging(
 def main():
     setup_logging()
     pair_list = ['BTCUSDT']
-    init_coins(pair_list)
-    db = Database(config)
-    val = db.get_coindata_values('15')
-    rsi_heatmap(df=val)
-    # init_bot()
+    #manage_coin = init_coins(pair_list)
+    #schedule.every(1).minute.at(':30').do(manage_coin.update_coin_info)
+
+    # db = Database(config)
+    # val = db.get_coindata_values('15')
+    # rsi_heatmap(df=val)
+    init_bot()
     while True:
+        schedule.run_pending()
         time.sleep(1)
 
 
