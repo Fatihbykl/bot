@@ -3,6 +3,8 @@ import logging
 import numpy as np
 import math
 import threading
+import redis
+import json
 
 import pybit.exceptions
 
@@ -13,10 +15,13 @@ from market import Coin
 from db import Database
 from market import ManageCoins
 from talib import _ta_lib as talib
-from pybit.unified_trading import HTTP
-from confdata import Side, Position
+from pybit.unified_trading import HTTP, WebSocket
+from confdata import Side, Position, StrategyInfo, TradeData
 from decimal import Decimal, getcontext
-from strategies.strategies import StmaADX
+from strategies.strategies import StmaADX, Supertrend
+from pprint import pprint
+
+
 
 
 class ManageBots:
@@ -24,23 +29,40 @@ class ManageBots:
 
     instance = None
 
-    def __new__(cls, db):
+    def __new__(cls, db, coins):
         """ Code for Singleton. """
 
         if not isinstance(cls.instance, cls):
             cls.instance = super(ManageBots, cls).__new__(cls)
         return cls.instance
 
-    def __init__(self, db):
+    def __init__(self, db, coins):
         self.db = db
+        self.coins = coins
+        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+        self.start_ws_executions_publish()
+
+    def handle_executions(self, execution):
+        symbol = execution['data'][0]['symbol']
+        data = json.dumps(execution)
+        self.redis.publish(channel=f'execution_{symbol}', message=data)
+
+    def start_ws_executions_publish(self):
+        ws = WebSocket(
+            channel_type='private',
+            api_key=config.BYBIT_API_KEY,
+            api_secret=config.BYBIT_SECRET,
+            testnet=True
+        )
+        ws.execution_stream(callback=self.handle_executions)
 
     def get_tradeable_coins(self):
         pass
 
     def start_bots(self):
-        coins = ManageCoins(config.INTERVALS, True)
-        coin = coins.get_coin_object('ASTRUSDT')
-        strategy = StmaADX()
+        coin = self.coins.get_coin_object('ETHUSDT')
+        coin.start_publish_data()
+        strategy = Supertrend()
         bot = Bot(db=self.db, coin=coin, strategy=strategy, interval='1', r_value='0.1')
         bot.start()
 
@@ -54,24 +76,38 @@ class Bot:
                  interval,
                  r_value,
                  strategy,
-                 trade_value=2000,
                  ):
         self.coin = coin
-        self.trade_value = trade_value
-        self.r_value = r_value
-        self.strategy = strategy
         self.stopped = True
         self.db = db
         self.interval = interval
 
+        self.strategy_info = StrategyInfo(
+            r_value=r_value,
+            strategy=strategy,
+            sl_buy='0.98',
+            sl_sell='1.02',
+            tp_buy='1.01',
+            tp_sell='0.99'
+        )
+
+        self.trade_data = TradeData(
+            current_price='',
+            tp_price='',
+            sl_price='',
+            candle_closed=False,
+            ohlc_data=None,
+            signal=Side.NO_SIGNAL
+        )
+
         self.position = None
-
         self.leverage = 10
-        self.stop_loss_buy = '0.98'
-        self.stop_loss_sell = '1.02'
 
-        self.ohlc_data = None
-        self.signal = None
+        self.redis = redis.Redis(host='localhost', port=6379, db=0)
+        self.pubsub_price = self.redis.pubsub()
+        self.pubsub_execution = self.redis.pubsub()
+        self.pubsub_price.subscribe(f'realtime_{coin.symbol}')
+        self.pubsub_execution.subscribe(f'execution_{self.coin.symbol}')
 
         self.max_qty = None
         self.min_qty = None
@@ -94,42 +130,52 @@ class Bot:
 
     def run(self):
         """ Main function that run forever. """
-
+        
         self.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
-        while not self.stopped:  # and check if position open
-            current_price = self.coin.current_price[0]
-            candle_closed = self.coin.current_price[1]
-
-            if candle_closed:
-                self.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
-                self.signal = self.strategy.produce_signal(
-                    self.ohlc_data['open'],
-                    self.ohlc_data['high'],
-                    self.ohlc_data['low'],
-                    self.ohlc_data['close'],
-                    10,
-                    0.5,
-                    100,
-                    0.7
-                )
-
-            if not self.position:
-                if self.signal == Side.BUY:
-                    self.place_market_order(Side.BUY, self.calculate_quantity())
-                elif self.signal == Side.SELL:
-                    self.place_market_order(Side.SELL, self.calculate_quantity())
+        while not self.stopped or self.position:  # and check if position open
+            self.check_position()
+            message = self.pubsub_price.get_message()
+            if message and not message['data'] == 1:
+                split = message['data'].split(b',')
+                self.trade_data.current_price = split[0].decode("utf-8") 
+                self.trade_data.candle_closed = split[1].decode("utf-8") 
+                #print(f'Price: {self.trade_data.current_price}, is_closed: {self.trade_data.candle_closed}')
             
+                if self.trade_data.candle_closed == 'True':
+                    self.trade_data.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
+                    self.trade_data.signal = self.strategy_info.strategy.produce_signal(
+                        self.trade_data.ohlc_data['close'],
+                        self.trade_data.ohlc_data['high'],
+                        self.trade_data.ohlc_data['low'],
+                        1,
+                        1
+                    )
+                    print(f'signal: {self.trade_data.signal}')
+                    print(f'ohlc: {self.trade_data.ohlc_data}')
 
-        """
-        qty = self.calculate_quantity()
-        self.place_market_order(Side.BUY, qty)
-        print(self.buy_position)
-        time.sleep(10)
-        self.close_position(self.buy_position, 0.5)
-        time.sleep(10)
-        self.close_position(self.buy_position, 1)
-        print(self.buy_position)
-        """
+                if not self.position:
+                    if self.trade_data.signal == Side.BUY:
+                        self.place_market_order(Side.BUY, self.calculate_quantity())
+                    elif self.trade_data.signal == Side.SELL:
+                        self.place_market_order(Side.SELL, self.calculate_quantity())
+                else:
+                    if self.position.side == Side.BUY:
+                        if self.trade_data.signal == Side.CLOSE:
+                            self.close_position(size=1)
+                        elif self.trade_data.signal == Side.SELL:
+                            self.close_position()
+                            self.place_market_order(Side.SELL, self.calculate_quantity())
+                    elif self.position.side == Side.SELL:
+                        if self.trade_data.signal == Side.CLOSE:
+                            self.close_position(size=1)
+                        elif self.trade_data.signal == Side.BUY:
+                            self.close_position()
+                            self.place_market_order(Side.BUY, self.calculate_quantity())
+
+                
+                time.sleep(0.3)
+
+            
 
     def start(self):
         """ Start thread. """
@@ -186,19 +232,20 @@ class Bot:
 
         balance = Decimal(self.get_account_balance())
         value = balance * Decimal(5)
-        r = value * Decimal(self.r_value)
-        raw_qty = r / Decimal(self.coin.current_price[0])
+        r = value * Decimal(self.strategy_info.r_value)
+        raw_qty = r / Decimal(self.trade_data.current_price)
         qty = math.floor(raw_qty / Decimal(self.min_qty)) * Decimal(self.min_qty)
-        return min(round(qty, 3), int(self.max_qty))
+        return min(round(qty, 3), Decimal(self.max_qty))
 
     def place_market_order(self, side, quantity):
         """ Buy coin with market order. """
 
-        stop_loss = None
         if side == Side.BUY:
-            stop_loss = Decimal(self.coin.current_price[0]) * Decimal(self.stop_loss_buy)
+            stop_loss = Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.sl_buy)
+            take_profit = Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.tp_buy)
         else:
-            stop_loss = Decimal(self.coin.current_price[0]) * Decimal(self.stop_loss_sell)
+            stop_loss = Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.sl_sell)
+            take_profit = Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.tp_sell)
 
         order = self.session.place_order(
             category='linear',
@@ -206,23 +253,46 @@ class Bot:
             side=side,
             orderType='Market',
             qty=quantity,
-            stopLoss=stop_loss
+            stopLoss=stop_loss,
+            tpslMode='Full'
         )
-        self.update_position()
+        tp_qty = round(Decimal(quantity) / 2, 3)
+        tp_order = self.session.set_trading_stop(
+            category='linear',
+            symbol=self.coin.symbol,
+            takeProfit=take_profit,
+            tpTriggerBy='LastPrice',
+            tpslMode='Partial',
+            tpOrderType='Market',
+            tpSize=tp_qty,
+            positionIdx=0
+        )
+        
         return order
 
-    def close_position(self, position, size):
+    def update_stoploss_to_entry(self):
+        self.session.set_trading_stop(
+            category="linear",
+            symbol=self.coin.symbol,
+            stopLoss=self.position.entry_price,
+            slTriggerBy="LastPrice",
+            tpslMode="Full",
+            tpOrderType="Market",
+            positionIdx=0
+        )
+
+    def close_position(self, size):
         """
             Close position or take profit from it.
             Size=1 means full position, Size=0.5 means close half of the position etc.
         """
 
-        position_side = position.side
+        position_side = self.position.side
         if position_side == Side.BUY:
             position_side = Side.SELL
         else:
             position_side = Side.BUY
-        qty = Decimal(position.size) * Decimal(size)
+        qty = Decimal(self.position.size) * Decimal(size)
         order = self.session.place_order(
             category='linear',
             symbol=self.coin.symbol,
@@ -231,11 +301,28 @@ class Bot:
             orderType='Market',
             reduceOnly=True
         )
-        if size == 1:
-            self.position = None
-        else:
-            self.update_position()
+        self.update_position()
         return order
+
+    def check_position(self):
+        message = self.pubsub_execution.get_message()
+        
+        if message and not message['data'] == 1:
+            msg = message['data'].decode("utf-8") 
+            msg = json.loads(msg)
+            closed_size = msg['data'][0]['closedSize']
+            order_type = msg['data'][0]['stopOrderType']
+
+            if closed_size == '0': # new position opened
+                self.update_position()
+            else: # tp or stoploss executed
+                if order_type == 'StopLoss':
+                    self.position = None
+                elif order_type == 'TakeProfit':
+                    self.update_position()
+                    self.update_stoploss_to_entry()
+
+            pprint(msg)
 
     def update_position(self):
         """ Update position parameters. """
@@ -244,20 +331,29 @@ class Bot:
             category="linear",
             symbol=self.coin.symbol,
         )
-        for position in positions['result']['list']:
-            if not self.position:
-                pos = Position(
-                    symbol=position['symbol'],
-                    side=position['side'],
-                    size=position['size'],
-                    entry_price=position['avgPrice'],
-                    created_time=datetime.now(),
-                    close_prices=[],
-                    value=position['positionValue']
-                )
-                self.position = pos
-            elif self.position.size != position['size']:
-                self.position.size = position['size']
-                self.position.value = position['positionValue']
-                self.position.close_prices.append(self.coin.current_price[0])
+        position = positions['result']['list'][0]
+        if Decimal(position['positionValue']) == 0:
+            self.position = None
+        elif not self.position:
+            pos = Position(
+                symbol=position['symbol'],
+                side=position['side'],
+                size=position['size'],
+                entry_price=position['avgPrice'],
+                created_time=datetime.now(),
+                close_prices=[],
+                value=position['positionValue']
+            )
+            self.position = pos
+            if pos.side == Side.BUY:
+                self.trade_data.sl_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.sl_buy)
+                self.trade_data.tp_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.tp_buy)
+            else:
+                self.trade_data.sl_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.sl_sell)
+                self.trade_data.tp_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.tp_sell)
+        elif self.position.size != position['size']:
+            self.position.size = position['size']
+            self.position.value = position['positionValue']
+            self.position.close_prices.append(self.trade_data.current_price)
+            self.trade_data.sl_price = self.position.entry_price
 

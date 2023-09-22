@@ -1,6 +1,7 @@
 import csv
 import logging
 import time
+import redis
 from pybit.unified_trading import WebSocket
 from pybit.unified_trading import MarketHTTP
 from talib import _ta_lib as talib
@@ -17,18 +18,19 @@ class ManageCoins:
 
     instance = None
 
-    def __new__(cls, intervals, testnet):
+    def __new__(cls, intervals, testnet, db):
         """ Code for Singleton. """
 
         if not isinstance(cls.instance, cls):
             cls.instance = super(ManageCoins, cls).__new__(cls)
         return cls.instance
 
-    def __init__(self, intervals, testnet):
+    def __init__(self, intervals, testnet, db):
         self.intervals = intervals
         self.object_dict = {}
         self.data_queue = Queue()
-        self.db = Database(config=config)
+        self.dict_queue = Queue()
+        self.db = db
         self.session = MarketHTTP(testnet=testnet)
         self.logger = logging.getLogger()
         self.testnet = testnet
@@ -44,6 +46,7 @@ class ManageCoins:
                     executor.submit(self.initialize_objects, pair)
             executor.shutdown(wait=True)
             self.insert_data_to_db()
+            self.queue_to_dict()
             self.logger.info('--- %s coins initialized successfully! ---', str(len(pair_names)))
         except Exception as e:
             self.logger.exception(e)
@@ -52,19 +55,24 @@ class ManageCoins:
     def initialize_objects(self, pair):
         """ Init coin objects and add historical data to queue. """
 
-        obj = Coin(symbol=pair, channel_type='linear', testnet=self.testnet, intervals=self.intervals)
-        self.object_dict[pair] = obj
+        obj = Coin(symbol=pair, channel_type='linear', testnet=self.testnet, intervals=self.intervals, db=self.db)
+        self.dict_queue.put(obj)
         for interval in self.intervals:
             time.sleep(0.1)
             values = self.extract_values_from_response(pair=pair, interval=interval)
             self.data_queue.put(values)
         self.logger.info('%s initialized successfully', pair)
 
+    def queue_to_dict(self):
+        while not self.dict_queue.empty():
+            obj = self.dict_queue.get()
+            self.object_dict[obj.symbol] = obj
+
     def extract_values_from_response(self, pair, interval):
         """ Get historical bars. """
 
         values = []
-        data = self.session.get_kline(category='linear', symbol=pair, interval=interval, limit=500)
+        data = self.session.get_kline(category='linear', symbol=pair, interval=interval, limit=1000)
         for item in data['result']['list']:
             timestamp = datetime.fromtimestamp(int(item[0]) / 1000)
             open = item[1]
@@ -109,26 +117,28 @@ class Coin:
 
     def __init__(
             self,
-            symbol=None,
-            channel_type=None,
-            testnet=None,
-            intervals=None
+            symbol,
+            channel_type,
+            testnet,
+            intervals,
+            db: Database
     ):
         self.symbol = symbol
         self.channel_type = channel_type
         self.testnet = testnet
-        self.db = Database(config)
-        self.current_price = '0'
+        self.db = db
+        self.publish_data = False
+        self.redis = None
 
     def start(self):
         """ Start websocket connection. """
 
         ws = WebSocket(testnet=self.testnet, channel_type=self.channel_type)
         ws.kline_stream(1, self.symbol, self.handle_data)
-        ws.kline_stream(15, self.symbol, self.handle_data)
-        ws.kline_stream(60, self.symbol, self.handle_data)
-        ws.kline_stream(240, self.symbol, self.handle_data)
-        ws.kline_stream('D', self.symbol, self.handle_data)
+        #ws.kline_stream(15, self.symbol, self.handle_data)
+        #ws.kline_stream(60, self.symbol, self.handle_data)
+        #ws.kline_stream(240, self.symbol, self.handle_data)
+        #ws.kline_stream('D', self.symbol, self.handle_data)
 
     def handle_data(self, data):
         """ Get data from websocket and save candle closes to database. """
@@ -155,7 +165,12 @@ class Coin:
                 self.calculate_indicators('240')
             elif _interval == 'D':
                 self.calculate_indicators('D')
-        self.current_price = (_close, is_closed)
+        if self.publish_data:
+            self.redis.publish(channel=f'realtime_{self.symbol}', message=f'{_close},{is_closed}')
+
+    def start_publish_data(self):
+        self.publish_data = True
+        self.redis = redis.Redis(host='localhost', port=6379, db=0)
 
     def calculate_indicators(self, interval):
         """ Calculate indicators. """

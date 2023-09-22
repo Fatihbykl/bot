@@ -1,5 +1,7 @@
 __pycache__/
+my_venv/
 .idea/
 .env
+*.rdb
 *.whl
-bot2.py
+*.log

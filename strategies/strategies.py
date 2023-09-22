@@ -1,23 +1,24 @@
 from talib import _ta_lib as talib
 from tradebot.confdata import Side
 import numpy as np
+import math
 
 
 class StmaADX:
 
     def produce_signal(self, open, high, low, close, periods, multiplier, length, T3a1):
         trend = self.supertrend_ma(open, high, low, close, periods, multiplier, length, T3a1)
-        adx = talib.ADX(high, low, close, 14)
+        #adx = talib.ADX(high, low, close, 14)
         buy_signal = (trend == 1) & (np.roll(trend, 1) == -1)
         sell_signal = (trend == -1) & (np.roll(trend, 1) == 1)
 
-        if adx > 20:
-            if buy_signal:
-                return Side.BUY
-            elif sell_signal:
-                return Side.SELL
-            else:
-                return None
+        #if adx[-1] > 20:
+        if buy_signal[-1]:
+            return Side.BUY
+        elif sell_signal[-1]:
+            return Side.SELL
+        else:
+            return Side.NO_SIGNAL
 
     def supertrend_ma(self, open, high, low, close, periods, multiplier, length, T3a1):
         changeATR = True  # Change this to False if needed
@@ -61,3 +62,87 @@ class StmaADX:
         trend = np.where((trend == -1) & (ohlc4 > dn1), 1, np.where((trend == 1) & (ohlc4 < up1), -1, trend))
 
         return trend
+
+
+class Supertrend:
+
+    def produce_signal(self, close_array, high_array, low_array, atr_period, atr_multiplier):
+        supertrend = self.generateSupertrend(close_array, high_array, low_array, atr_period, atr_multiplier)
+
+        son_kapanis = close_array[-1]
+        onceki_kapanis = close_array[-2]
+
+        son_supertrend_deger = supertrend[-1]
+        onceki_supertrend_deger = supertrend[-2]
+
+        # renk yeşile dönüyor, trend yükselişe geçti
+        if son_kapanis > son_supertrend_deger and onceki_kapanis < onceki_supertrend_deger:
+            return Side.BUY
+
+        # renk kırmızıya dönüyor, trend düşüşe geçti
+        elif son_kapanis < son_supertrend_deger and onceki_kapanis > onceki_supertrend_deger:
+            return Side.SELL
+        
+        else:
+            return Side.NO_SIGNAL
+
+    def generateSupertrend(self, close_array, high_array, low_array, atr_period, atr_multiplier):
+
+        atr = talib.ATR(high_array, low_array, close_array, atr_period)
+
+        previous_final_upperband = 0
+        previous_final_lowerband = 0
+        final_upperband = 0
+        final_lowerband = 0
+        previous_close = 0
+        previous_supertrend = 0
+        supertrend = []
+        supertrendc = 0
+
+        for i in range(0, len(close_array)):
+            if np.isnan(close_array[i]):
+                pass
+            else:
+                highc = high_array[i]
+                lowc = low_array[i]
+                atrc = atr[i]
+                closec = close_array[i]
+
+                if math.isnan(atrc):
+                    atrc = 0
+
+                basic_upperband = (highc + lowc) / 2 + atr_multiplier * atrc
+                basic_lowerband = (highc + lowc) / 2 - atr_multiplier * atrc
+
+                if basic_upperband < previous_final_upperband or previous_close > previous_final_upperband:
+                    final_upperband = basic_upperband
+                else:
+                    final_upperband = previous_final_upperband
+
+                if basic_lowerband > previous_final_lowerband or previous_close < previous_final_lowerband:
+                    final_lowerband = basic_lowerband
+                else:
+                    final_lowerband = previous_final_lowerband
+
+                if previous_supertrend == previous_final_upperband and closec <= final_upperband:
+                    supertrendc = final_upperband
+                else:
+                    if previous_supertrend == previous_final_upperband and closec >= final_upperband:
+                        supertrendc = final_lowerband
+                    else:
+                        if previous_supertrend == previous_final_lowerband and closec >= final_lowerband:
+                            supertrendc = final_lowerband
+                        elif previous_supertrend == previous_final_lowerband and closec <= final_lowerband:
+                            supertrendc = final_upperband
+
+                supertrend.append(supertrendc)
+
+                previous_close = closec
+
+                previous_final_upperband = final_upperband
+
+                previous_final_lowerband = final_lowerband
+
+                previous_supertrend = supertrendc
+
+        return supertrend
