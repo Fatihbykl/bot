@@ -15,11 +15,10 @@ class Side(str, Enum):
 class Position:
     symbol: str
     side: Side
-    size: float
-    entry_price: float
-    close_prices: []
+    size: str
+    entry_price: str
     value: str
-    created_time: datetime
+    created_time: str
 
 @dataclass
 class StrategyInfo:
@@ -34,8 +33,17 @@ class StrategyInfo:
 @dataclass
 class TradeData:
     current_price: str
-    tp_price: str
-    sl_price: str
     candle_closed: bool
     ohlc_data: {}
     signal: Side
+
+@dataclass
+class PaperTrade:
+    symbol: str
+    side: str
+    realized_pl: str
+    entry_price: str
+    closed_prices: []
+    sl_price: str
+    tp_price: str
+    created_time: str

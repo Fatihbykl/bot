@@ -157,6 +157,10 @@ class Coin:
         if is_closed:
             self.db.insert_row_kline(_topic=_topic, _timestamp=_timestamp, _interval=_interval, _open=_open,
                                      _close=_close, _high=_high, _low=_low, _volume=_volume)
+            
+            if self.publish_data:
+                self.redis.publish(channel=f'realtime_{self.symbol}_{_interval}', message=f'{_close},{is_closed}')
+
             if _interval == '15':
                 self.calculate_indicators('15')
             elif _interval == '60':
@@ -165,8 +169,7 @@ class Coin:
                 self.calculate_indicators('240')
             elif _interval == 'D':
                 self.calculate_indicators('D')
-        if self.publish_data:
-            self.redis.publish(channel=f'realtime_{self.symbol}', message=f'{_close},{is_closed}')
+        
 
     def start_publish_data(self):
         self.publish_data = True

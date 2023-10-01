@@ -92,14 +92,16 @@ def get_pair_list():
 
 
 def init_coins(pair_list, db):
-    coins = ManageCoins(intervals=config.INTERVALS, testnet=True, db=db)
+    coins = ManageCoins(intervals=config.INTERVALS, testnet=False, db=db)
     #coins.update_coin_info()
+    
     coins.add_coin_connection(pair_list)
     for coin in coins.object_dict.values():
         time.sleep(0.2)
         coin.start()
         for interval in config.INTERVALS:
             coin.calculate_indicators(interval=interval)
+    
     return coins
 
 

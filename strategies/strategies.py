@@ -2,6 +2,7 @@ from talib import _ta_lib as talib
 from tradebot.confdata import Side
 import numpy as np
 import math
+import pandas as pd
 
 
 class StmaADX:
@@ -68,7 +69,7 @@ class Supertrend:
 
     def produce_signal(self, close_array, high_array, low_array, atr_period, atr_multiplier):
         supertrend = self.generateSupertrend(close_array, high_array, low_array, atr_period, atr_multiplier)
-
+        
         son_kapanis = close_array[-1]
         onceki_kapanis = close_array[-2]
 

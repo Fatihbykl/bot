@@ -1,0 +1,19 @@
+{
+    "Positions": "1",
+    "Wins": "1",
+    "Losses": "0",
+    "Win Rate": "100"
+}
+[
+    {
+        "symbol": "ETHUSDT",
+        "side": "Sell",
+        "realized_pl": "0.119351681665194662592796",
+        "closed_prices": [
+            "1675.72"
+        ],
+        "sl_price": "(Decimal('1709.4384'),)",
+        "tp_price": "1659.1608",
+        "created_time": "2023-10-01 22:34:59.904012"
+    }
+]

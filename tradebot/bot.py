@@ -5,6 +5,7 @@ import math
 import threading
 import redis
 import json
+import logging
 
 import pybit.exceptions
 
@@ -16,10 +17,11 @@ from db import Database
 from market import ManageCoins
 from talib import _ta_lib as talib
 from pybit.unified_trading import HTTP, WebSocket
-from confdata import Side, Position, StrategyInfo, TradeData
+from confdata import Side, Position, StrategyInfo, TradeData, PaperTrade
 from decimal import Decimal, getcontext
 from strategies.strategies import StmaADX, Supertrend
 from pprint import pprint
+from dataclasses import asdict
 
 
 
@@ -40,7 +42,7 @@ class ManageBots:
         self.db = db
         self.coins = coins
         self.redis = redis.Redis(host='localhost', port=6379, db=0)
-        self.start_ws_executions_publish()
+        #self.start_ws_executions_publish()
 
     def handle_executions(self, execution):
         symbol = execution['data'][0]['symbol']
@@ -63,7 +65,7 @@ class ManageBots:
         coin = self.coins.get_coin_object('ETHUSDT')
         coin.start_publish_data()
         strategy = Supertrend()
-        bot = Bot(db=self.db, coin=coin, strategy=strategy, interval='1', r_value='0.1')
+        bot = Bot(db=self.db, coin=coin, strategy=strategy, interval='1', r_value='0.1', paper_trade=True)
         bot.start()
 
 
@@ -76,11 +78,28 @@ class Bot:
                  interval,
                  r_value,
                  strategy,
+                 paper_trade=False
                  ):
         self.coin = coin
         self.stopped = True
         self.db = db
         self.interval = interval
+        self.logger = logging.getLogger() 
+
+
+        # Paper trade
+        if paper_trade:
+            self.paper_trade = paper_trade
+        else:
+            self.paper_trade = None
+        
+        self.trades = []
+        self.paper_initial_balance = '1000'
+        self.paper_value = '1000'
+        self.paper_pos_count = 0
+        self.paper_win = 0
+        self.paper_lose = 0
+        self.win_rate = 0
 
         self.strategy_info = StrategyInfo(
             r_value=r_value,
@@ -93,8 +112,6 @@ class Bot:
 
         self.trade_data = TradeData(
             current_price='',
-            tp_price='',
-            sl_price='',
             candle_closed=False,
             ohlc_data=None,
             signal=Side.NO_SIGNAL
@@ -106,7 +123,7 @@ class Bot:
         self.redis = redis.Redis(host='localhost', port=6379, db=0)
         self.pubsub_price = self.redis.pubsub()
         self.pubsub_execution = self.redis.pubsub()
-        self.pubsub_price.subscribe(f'realtime_{coin.symbol}')
+        self.pubsub_price.subscribe(f'realtime_{coin.symbol}_{self.interval}')
         self.pubsub_execution.subscribe(f'execution_{self.coin.symbol}')
 
         self.max_qty = None
@@ -121,11 +138,6 @@ class Bot:
         self.set_instrument_info()
         self.set_leverage()
 
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s :: %(levelname)s :: %(message)s',
-            filename='./logs/bybit.log'
-        )
         getcontext().prec = 6
 
     def run(self):
@@ -133,7 +145,8 @@ class Bot:
         
         self.ohlc_data = self.db.get_last_ohlc(_topic=self.coin.symbol, _interval=self.interval)
         while not self.stopped or self.position:  # and check if position open
-            self.check_position()
+            if not self.paper_trade:
+                self.check_position()
             message = self.pubsub_price.get_message()
             if message and not message['data'] == 1:
                 split = message['data'].split(b',')
@@ -151,9 +164,35 @@ class Bot:
                         1
                     )
                     print(f'signal: {self.trade_data.signal}')
-                    print(f'ohlc: {self.trade_data.ohlc_data}')
 
-                if not self.position:
+
+                
+                if self.paper_trade:
+                    if not self.position:
+                        if self.trade_data.signal == Side.BUY:
+                            self.paper_open_position(Side.BUY)
+                        elif self.trade_data.signal == Side.SELL:
+                            self.paper_open_position(Side.SELL)
+                    else:
+                        if self.position.side == Side.BUY:
+                            if self.trade_data.signal == Side.CLOSE:
+                                self.paper_close_position()
+                            elif self.trade_data.signal == Side.SELL:
+                                self.paper_close_position()
+                                self.paper_open_position(Side.SELL)
+                        elif self.position.side == Side.SELL:
+                            if self.trade_data.signal == Side.CLOSE:
+                                self.paper_close_position()
+                            elif self.trade_data.signal == Side.BUY:
+                                self.paper_close_position()
+                                self.paper_open_position(Side.BUY)
+
+                if self.paper_pos_count >= 1:
+                    self.win_rate = Decimal(100) * (Decimal(self.paper_win) / (Decimal(self.paper_win) + Decimal(self.paper_lose)))
+                    self.print_paper_trades()
+                    break
+                """
+                elif not self.position:
                     if self.trade_data.signal == Side.BUY:
                         self.place_market_order(Side.BUY, self.calculate_quantity())
                     elif self.trade_data.signal == Side.SELL:
@@ -163,19 +202,71 @@ class Bot:
                         if self.trade_data.signal == Side.CLOSE:
                             self.close_position(size=1)
                         elif self.trade_data.signal == Side.SELL:
-                            self.close_position()
-                            self.place_market_order(Side.SELL, self.calculate_quantity())
+                            qty = Decimal(self.position.size) * 2
+                            self.place_market_order(Side.SELL, qty)
                     elif self.position.side == Side.SELL:
                         if self.trade_data.signal == Side.CLOSE:
                             self.close_position(size=1)
                         elif self.trade_data.signal == Side.BUY:
-                            self.close_position()
-                            self.place_market_order(Side.BUY, self.calculate_quantity())
-
+                            qty = Decimal(self.position.size) * 2
+                            self.place_market_order(Side.BUY, qty)
+                """
                 
-                time.sleep(0.3)
+                #time.sleep(0.3)
 
             
+    def print_paper_trades(self):
+        trade_list = json.dumps(self.trades)
+        backtest_infos = json.dumps({ 'Positions': str(self.paper_pos_count), 'Wins': str(self.paper_win), 'Losses': str(self.paper_lose), 'Win Rate': str(self.win_rate) })
+        with open('./logs/backtest_results.txt', 'w') as jf:
+            jf.write(backtest_infos)
+            jf.write('\n')
+            jf.write(trade_list)
+
+    def paper_open_position(self, side):
+        if side == Side.BUY:
+            sl_price=Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.sl_buy),
+            tp_price=Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.tp_buy)
+        else:
+            sl_price=Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.sl_sell),
+            tp_price=Decimal(self.trade_data.current_price) * Decimal(self.strategy_info.tp_sell)
+
+        self.position = Position(
+            symbol=self.coin.symbol,
+            side=side,
+            size='0',
+            created_time=str(datetime.now()),
+            entry_price=str(self.trade_data.current_price),
+            value=str(self.paper_value)
+        )
+        self.paper_trade = PaperTrade(
+            symbol=self.coin.symbol,
+            side=Side.SELL,
+            realized_pl='0',
+            entry_price=self.position.entry_price,
+            closed_prices=[],
+            sl_price=str(sl_price),
+            tp_price=str(tp_price),
+            created_time=str(datetime.now())
+        )
+
+    def paper_close_position(self):
+        if self.position.side == Side.BUY:
+            chg = Decimal(self.trade_data.current_price) / Decimal(self.position.entry_price)
+        else:
+            chg = Decimal(self.position.entry_price) / Decimal(self.trade_data.current_price)
+        self.paper_trade.closed_prices.append(self.trade_data.current_price)
+        self.paper_trade.realized_pl = str(
+                Decimal(self.paper_trade.realized_pl) + (Decimal(self.paper_value) * Decimal(chg) - Decimal(self.paper_value))
+            )
+        self.paper_initial_balance = Decimal(self.paper_initial_balance) + Decimal(self.paper_trade.realized_pl)
+        self.position = None
+        self.trades.append(asdict(self.paper_trade))
+        if Decimal(self.paper_trade.realized_pl) > 0:
+            self.paper_win += 1
+        else:
+            self.paper_lose += 1
+        self.paper_pos_count += 1
 
     def start(self):
         """ Start thread. """
@@ -252,19 +343,19 @@ class Bot:
             symbol=self.coin.symbol,
             side=side,
             orderType='Market',
-            qty=quantity,
-            stopLoss=stop_loss,
+            qty=str(quantity),
+            stopLoss=str(stop_loss),
             tpslMode='Full'
         )
         tp_qty = round(Decimal(quantity) / 2, 3)
         tp_order = self.session.set_trading_stop(
             category='linear',
             symbol=self.coin.symbol,
-            takeProfit=take_profit,
+            takeProfit=str(take_profit),
             tpTriggerBy='LastPrice',
             tpslMode='Partial',
             tpOrderType='Market',
-            tpSize=tp_qty,
+            tpSize=str(tp_qty),
             positionIdx=0
         )
         
@@ -297,11 +388,10 @@ class Bot:
             category='linear',
             symbol=self.coin.symbol,
             side=position_side,
-            qty=qty,
+            qty=str(qty),
             orderType='Market',
             reduceOnly=True
         )
-        self.update_position()
         return order
 
     def check_position(self):
@@ -310,19 +400,13 @@ class Bot:
         if message and not message['data'] == 1:
             msg = message['data'].decode("utf-8") 
             msg = json.loads(msg)
-            closed_size = msg['data'][0]['closedSize']
             order_type = msg['data'][0]['stopOrderType']
-
-            if closed_size == '0': # new position opened
-                self.update_position()
-            else: # tp or stoploss executed
-                if order_type == 'StopLoss':
-                    self.position = None
-                elif order_type == 'TakeProfit':
-                    self.update_position()
-                    self.update_stoploss_to_entry()
-
             pprint(msg)
+            self.update_position()
+            self.logger.info(self.position.entry_price)
+            if order_type == 'PartialTakeProfit':
+                self.update_stoploss_to_entry()
+                self.logger.info(f'TakeProfit: {self.position.side}, {self.position.entry_price}')
 
     def update_position(self):
         """ Update position parameters. """
@@ -332,28 +416,17 @@ class Bot:
             symbol=self.coin.symbol,
         )
         position = positions['result']['list'][0]
+        self.logger.info(f'pos val: {Decimal(position["positionValue"])}')
         if Decimal(position['positionValue']) == 0:
             self.position = None
-        elif not self.position:
+        else:
             pos = Position(
                 symbol=position['symbol'],
                 side=position['side'],
                 size=position['size'],
                 entry_price=position['avgPrice'],
                 created_time=datetime.now(),
-                close_prices=[],
                 value=position['positionValue']
             )
             self.position = pos
-            if pos.side == Side.BUY:
-                self.trade_data.sl_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.sl_buy)
-                self.trade_data.tp_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.tp_buy)
-            else:
-                self.trade_data.sl_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.sl_sell)
-                self.trade_data.tp_price = Decimal(pos.entry_price) * Decimal(self.strategy_info.tp_sell)
-        elif self.position.size != position['size']:
-            self.position.size = position['size']
-            self.position.value = position['positionValue']
-            self.position.close_prices.append(self.trade_data.current_price)
-            self.trade_data.sl_price = self.position.entry_price
 

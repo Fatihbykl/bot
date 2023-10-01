@@ -152,7 +152,7 @@ class Database:
         with connection.cursor() as cur:
             try:
                 query = """SELECT "open","close","high","low" FROM "KlineData" WHERE topic=%s AND interval=%s
-                        ORDER BY "timestamp" DESC """
+                        ORDER BY "timestamp" """
                 values = (_topic, str(_interval))
                 cur.execute(query, values)
                 open = []
